@@ -1,0 +1,88 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Expo Native Storage",
+  "projectDescription": "Lightning-fast native storage for Expo using UserDefaults and SharedPreferences",
+  "theme": "palm",
+  "primaryColor": "#4630EB",
+  "lightColor": "#A6B1FF",
+  "darkColor": "#1C1C1E",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/async-vs-sync",
+              "concepts/platform-implementation",
+              "concepts/performance"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/migration",
+              "guides/best-practices",
+              "guides/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Methods",
+            "pages": [
+              "api/async-methods",
+              "api/sync-methods",
+              "api/multi-operations"
+            ]
+          },
+          {
+            "group": "Types",
+            "pages": [
+              "api/type-definitions"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Async storage API (Promise-based)",
+    "Sync storage API (Immediate)",
+    "Native implementations (UserDefaults, SharedPreferences, localStorage)",
+    "Type-safe TypeScript support",
+    "Multi-operation methods",
+    "Drop-in AsyncStorage replacement",
+    "Lightweight bundle size (8KB)",
+    "Cross-platform (iOS, Android, Web)"
+  ],
+  "publicApiSurface": [
+    "Storage.setItem(key, value)",
+    "Storage.getItem(key)",
+    "Storage.removeItem(key)",
+    "Storage.clear()",
+    "Storage.setObject(key, object)",
+    "Storage.getObject(key)",
+    "Storage.setItemSync(key, value)",
+    "Storage.getItemSync(key)",
+    "Storage.removeItemSync(key)",
+    "Storage.clearSync()",
+    "Storage.setObjectSync(key, object)",
+    "Storage.getObjectSync(key)",
+    "Storage.multiGet(keys)",
+    "Storage.multiSet(items)",
+    "NativeStorage"
+  ]
+}
