@@ -1,0 +1,266 @@
+---
+title: 'Type Definitions'
+description: 'TypeScript type definitions and interfaces'
+---
+
+## NativeStorage Class
+
+The main storage class that provides all storage operations.
+
+```typescript
+export class NativeStorage {
+  // Async Methods
+  async setItem(key: string, value: string): Promise<void>;
+  async getItem(key: string): Promise<string | null>;
+  async removeItem(key: string): Promise<void>;
+  async clear(): Promise<void>;
+  async setObject<T extends Record<string, unknown>>(key: string, value: T): Promise<void>;
+  async getObject<T extends Record<string, unknown> = Record<string, unknown>>(key: string): Promise<T | null>;
+
+  // Sync Methods
+  setItemSync(key: string, value: string): void;
+  getItemSync(key: string): string | null;
+  removeItemSync(key: string): void;
+  clearSync(): void;
+  setObjectSync<T extends Record<string, unknown>>(key: string, value: T): void;
+  getObjectSync<T extends Record<string, unknown> = Record<string, unknown>>(key: string): T | null;
+
+  // Multi Operations
+  async multiGet(keys: string[]): Promise<Record<string, string | null>>;
+  async multiSet(items: Record<string, string>): Promise<void>;
+}
+```
+
+### Usage
+
+```typescript
+import { NativeStorage } from 'expo-native-storage';
+
+// Create your own instance
+const storage = new NativeStorage();
+await storage.setItem('key', 'value');
+
+// Or use the default instance
+import Storage from 'expo-native-storage';
+await Storage.setItem('key', 'value');
+```
+
+---
+
+## ExpoNativeStorageModule Interface
+
+The native module interface that provides the underlying platform-specific storage operations.
+
+```typescript
+export type ExpoNativeStorageModule = {
+  // Async Methods
+  setItem(key: string, value: string): Promise<void>;
+  getItem(key: string): Promise<string | null>;
+  removeItem(key: string): Promise<void>;
+  clear(): Promise<void>;
+
+  // Sync Methods
+  setItemSync(key: string, value: string): void;
+  getItemSync(key: string): string | null;
+  removeItemSync(key: string): void;
+  clearSync(): void;
+};
+```
+
+### Platform Implementation
+
+This interface is implemented natively on each platform:
+
+- **iOS**: Uses `UserDefaults` for synchronous key-value storage
+- **Android**: Uses `SharedPreferences` for synchronous key-value storage
+- **Web**: Uses `localStorage` for synchronous key-value storage
+
+### Internal Usage
+
+The native module is loaded using Expo's `requireNativeModule`:
+
+```typescript
+import { requireNativeModule } from 'expo-modules-core';
+
+const ExpoNativeStorageModule = requireNativeModule<ExpoNativeStorageModule>(
+  'ExpoNativeStorage'
+);
+```
+
+<Note>
+  The `ExpoNativeStorageModule` is used internally by the `NativeStorage` class. You typically don't need to access it directly.
+</Note>
+
+---
+
+## Generic Type Parameters
+
+Several methods support TypeScript generics for type-safe object storage.
+
+### Object Methods Type Parameter
+
+Both `setObject` and `getObject` methods (async and sync) use a generic type parameter `T`:
+
+```typescript
+T extends Record<string, unknown>
+```
+
+This constraint ensures that:
+- The type must be an object (not a primitive)
+- The object can have any string keys
+- The values can be of any type
+- The object must be JSON-serializable
+
+### Example: Type-Safe Object Storage
+
+```typescript
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  premium: boolean;
+}
+
+// TypeScript knows the type
+const user: User = {
+  id: 1,
+  name: 'John Doe',
+  email: 'john@example.com',
+  premium: true
+};
+
+// Type-safe storage
+await Storage.setObject<User>('user', user);
+
+// Type-safe retrieval
+const storedUser = await Storage.getObject<User>('user');
+if (storedUser) {
+  // TypeScript knows all properties
+  console.log(storedUser.name); // string
+  console.log(storedUser.premium); // boolean
+}
+```
+
+### Default Generic Type
+
+If no type parameter is provided, `getObject` defaults to `Record<string, unknown>`:
+
+```typescript
+// Without type parameter
+const data = await Storage.getObject('config');
+// Type: Record<string, unknown> | null
+
+// Access properties (no type safety)
+if (data) {
+  console.log(data.someProperty); // unknown
+}
+```
+
+---
+
+## Export Structure
+
+The library provides both named and default exports:
+
+```typescript
+// Named export: NativeStorage class
+export class NativeStorage { /* ... */ }
+
+// Default export: Pre-instantiated Storage object
+const Storage = new NativeStorage();
+export default Storage;
+```
+
+### Import Options
+
+```typescript
+// Option 1: Use the default instance (recommended)
+import Storage from 'expo-native-storage';
+await Storage.setItem('key', 'value');
+
+// Option 2: Import the class and create your own instance
+import { NativeStorage } from 'expo-native-storage';
+const myStorage = new NativeStorage();
+await myStorage.setItem('key', 'value');
+
+// Option 3: Import both
+import Storage, { NativeStorage } from 'expo-native-storage';
+```
+
+<Info>
+  Most applications should use the default `Storage` instance for simplicity and consistency.
+</Info>
+
+---
+
+## Type Examples
+
+### Basic String Storage
+
+```typescript
+// Simple key-value storage
+const key: string = 'username';
+const value: string = 'john_doe';
+
+await Storage.setItem(key, value);
+const result: string | null = await Storage.getItem(key);
+```
+
+### Object Storage with Interface
+
+```typescript
+interface AppSettings {
+  theme: 'light' | 'dark';
+  language: string;
+  notifications: boolean;
+  fontSize: number;
+}
+
+const settings: AppSettings = {
+  theme: 'dark',
+  language: 'en',
+  notifications: true,
+  fontSize: 16
+};
+
+await Storage.setObject<AppSettings>('settings', settings);
+const loaded: AppSettings | null = await Storage.getObject<AppSettings>('settings');
+```
+
+### Multi Operations with Types
+
+```typescript
+// multiGet with known keys
+const keys: string[] = ['username', 'email', 'theme'];
+const result: Record<string, string | null> = await Storage.multiGet(keys);
+
+// multiSet with type-safe object
+const items: Record<string, string> = {
+  username: 'john_doe',
+  email: 'john@example.com',
+  theme: 'dark'
+};
+await Storage.multiSet(items);
+```
+
+### Sync Methods with Types
+
+```typescript
+// Sync string operations
+Storage.setItemSync('key', 'value');
+const value: string | null = Storage.getItemSync('key');
+
+// Sync object operations with interface
+interface Config {
+  apiUrl: string;
+  timeout: number;
+}
+
+const config: Config = {
+  apiUrl: 'https://api.example.com',
+  timeout: 5000
+};
+
+Storage.setObjectSync<Config>('config', config);
+const loaded: Config | null = Storage.getObjectSync<Config>('config');
+```

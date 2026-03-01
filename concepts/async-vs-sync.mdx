@@ -1,0 +1,255 @@
+---
+title: Async vs Sync APIs
+description: Understanding when to use async or sync methods in expo-native-storage
+---
+
+expo-native-storage provides both async (Promise-based) and sync (immediate) APIs. Both APIs access the same underlying native storage, so you can mix and match them based on your needs.
+
+## The async API
+
+The async API returns Promises and is designed for asynchronous workflows:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// All async methods return Promises
+await Storage.setItem('key', 'value');
+const value = await Storage.getItem('key');
+await Storage.removeItem('key');
+await Storage.clear();
+
+// Object operations
+await Storage.setObject('user', { name: 'John', age: 30 });
+const user = await Storage.getObject('user');
+
+// Batch operations
+await Storage.multiSet({ key1: 'value1', key2: 'value2' });
+const values = await Storage.multiGet(['key1', 'key2']);
+```
+
+### When to use async methods
+
+Use async methods when:
+
+- **Coordinating with other async operations** - When storage operations are part of a larger async workflow
+- **You prefer Promise-based code** - For consistency with other async APIs in your codebase
+- **Loading data in useEffect** - When fetching data after component mount
+- **Network operations** - When combining storage with API calls
+
+```typescript
+import { useEffect, useState } from 'react';
+import Storage from 'expo-native-storage';
+
+function UserProfile() {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      // Load cached user data
+      const cachedUser = await Storage.getObject('user');
+      setUser(cachedUser);
+
+      // Fetch fresh data from API
+      const response = await fetch('/api/user');
+      const freshUser = await response.json();
+      
+      // Update cache and state
+      await Storage.setObject('user', freshUser);
+      setUser(freshUser);
+    };
+
+    loadUser();
+  }, []);
+
+  return <Text>{user?.name}</Text>;
+}
+```
+
+## The sync API
+
+The sync API provides immediate access without Promises:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// All sync methods execute immediately
+Storage.setItemSync('key', 'value');
+const value = Storage.getItemSync('key');
+Storage.removeItemSync('key');
+Storage.clearSync();
+
+// Object operations
+Storage.setObjectSync('user', { name: 'John', age: 30 });
+const user = Storage.getObjectSync('user');
+```
+
+### When to use sync methods
+
+Use sync methods for:
+
+- **App initialization** - Reading config or settings when the app starts
+- **Component initialization** - Loading values during useState/useReducer setup
+- **Settings screens** - Immediate reads and writes for user preferences
+- **Synchronous rendering logic** - When you need values before the first render
+
+```typescript
+import { useState } from 'react';
+import Storage from 'expo-native-storage';
+
+function ThemeProvider({ children }) {
+  // Load theme synchronously during initialization
+  const [theme, setTheme] = useState(() => {
+    return Storage.getItemSync('theme') || 'light';
+  });
+
+  const updateTheme = (newTheme: string) => {
+    setTheme(newTheme);
+    // Save synchronously for immediate persistence
+    Storage.setItemSync('theme', newTheme);
+  };
+
+  return (
+    <ThemeContext.Provider value={{ theme, updateTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+```
+
+<Tip>
+  Sync methods eliminate loading states by providing immediate access to stored values during component initialization.
+</Tip>
+
+## Performance comparison
+
+Sync methods are faster than async methods because they skip the Promise overhead:
+
+### Android performance (1000 operations)
+
+| Method Type | Time | Improvement |
+|-------------|------|-------------|
+| Sync | 98ms | Baseline |
+| Async | 472ms | 4.8x slower |
+
+### iOS performance (1000 operations)
+
+| Method Type | Time | Improvement |
+|-------------|------|-------------|
+| Sync | 1098ms | Baseline |
+| Async | 1499ms | 1.4x slower |
+
+<Note>
+  The performance difference comes from Promise creation overhead, not the native storage operations themselves. Both APIs use the same native storage underneath.
+</Note>
+
+## iOS-specific considerations
+
+On iOS, both async and sync methods use `UserDefaults`, which performs disk I/O synchronously (~1ms per write). For bulk write operations (1000+ writes), the disk I/O becomes the bottleneck:
+
+```swift ExpoNativeStorageModule.swift
+Function("setItemSync") { (key: String, value: String) in
+  UserDefaults.standard.set(value, forKey: key)
+}
+
+AsyncFunction("setItem") { (key: String, value: String) in
+  UserDefaults.standard.set(value, forKey: key)
+}
+```
+
+Both methods call `UserDefaults.standard.set()`, which writes to disk. The async wrapper doesn't make the disk operation faster.
+
+<Info>
+  For typical use cases like app settings and user preferences, iOS sync methods provide excellent performance. For bulk operations (1000+ writes), consider specialized libraries like [react-native-mmkv](https://github.com/mrousavy/react-native-mmkv).
+</Info>
+
+## Android-specific considerations
+
+On Android, both methods use `SharedPreferences`, which maintains an in-memory cache:
+
+```kotlin ExpoNativeStorageModule.kt
+Function("setItemSync") { key: String, value: String ->
+  prefs.edit().putString(key, value).apply()
+}
+
+AsyncFunction("setItem") { key: String, value: String ->
+  prefs.edit().putString(key, value).apply()
+}
+```
+
+The `apply()` method writes asynchronously to disk but updates the in-memory cache immediately, making subsequent reads instant from the cache.
+
+## Mixing async and sync
+
+You can freely mix async and sync methods in the same app since they access the same storage:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Write synchronously
+Storage.setItemSync('theme', 'dark');
+
+// Read asynchronously
+const theme = await Storage.getItem('theme'); // 'dark'
+
+// Write asynchronously
+await Storage.setItem('username', 'john');
+
+// Read synchronously
+const username = Storage.getItemSync('username'); // 'john'
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use sync for app initialization">
+    Sync methods eliminate loading states and provide instant access to configuration:
+
+    ```typescript
+    const [config] = useState(() => {
+      return Storage.getObjectSync('config') || defaultConfig;
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Use async for network coordination">
+    When combining storage with API calls, async methods keep code consistent:
+
+    ```typescript
+    const loadData = async () => {
+      const cached = await Storage.getObject('data');
+      const fresh = await fetchFromAPI();
+      await Storage.setObject('data', fresh);
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="Use sync for immediate persistence">
+    Settings screens benefit from immediate writes without Promise overhead:
+
+    ```typescript
+    const handleChange = (value: string) => {
+      setState(value);
+      Storage.setItemSync('setting', value);
+    };
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Platform Implementation"
+    icon="server"
+    href="/concepts/platform-implementation"
+  >
+    Learn how expo-native-storage works on each platform.
+  </Card>
+  <Card
+    title="Best Practices"
+    icon="star"
+    href="/guides/best-practices"
+  >
+    Discover patterns for error handling, type safety, and data management.
+  </Card>
+</CardGroup>

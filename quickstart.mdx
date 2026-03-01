@@ -1,80 +1,232 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get up and running with expo-native-storage in minutes
 ---
 
-## Get started in three steps
+This guide will help you start using expo-native-storage in your Expo app. You'll learn how to store and retrieve data using both async and sync APIs.
 
-Get your documentation site running locally and make your first customization.
+## Basic usage
 
-### Step 1: Set up your local environment
+expo-native-storage provides two APIs: async (Promise-based) and sync (immediate). Choose the one that fits your use case.
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+### Async API (Promise-based)
+
+The async API is ideal when you need to coordinate with other async operations:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Store a string value
+await Storage.setItem('username', 'john_doe');
+
+// Retrieve a string value
+const username = await Storage.getItem('username');
+console.log(username); // 'john_doe'
+
+// Store an object
+await Storage.setObject('user', { 
+  name: 'John Doe', 
+  email: 'john@example.com',
+  age: 30 
+});
+
+// Retrieve an object
+const user = await Storage.getObject('user');
+console.log(user?.name); // 'John Doe'
+
+// Remove an item
+await Storage.removeItem('username');
+
+// Clear all stored data
+await Storage.clear();
+```
+
+### Sync API (Immediate)
+
+The sync API is perfect for app initialization and settings screens where you need immediate results:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Store a string value synchronously
+Storage.setItemSync('username', 'john_doe');
+
+// Retrieve a string value synchronously
+const username = Storage.getItemSync('username');
+console.log(username); // 'john_doe'
+
+// Store an object synchronously
+Storage.setObjectSync('user', { 
+  name: 'John Doe', 
+  email: 'john@example.com',
+  age: 30 
+});
+
+// Retrieve an object synchronously
+const user = Storage.getObjectSync('user');
+console.log(user?.name); // 'John Doe'
+
+// Remove an item synchronously
+Storage.removeItemSync('username');
+
+// Clear all stored data synchronously
+Storage.clearSync();
+```
+
+## Real-world example: Theme persistence
+
+Here's a practical example showing how to persist and load a user's theme preference:
+
+```typescript App.tsx
+import { useEffect, useState } from 'react';
+import { View, Text, Switch, StyleSheet } from 'react-native';
+import Storage from 'expo-native-storage';
+
+export default function App() {
+  const [isDark, setIsDark] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load theme preference on app start
+  useEffect(() => {
+    const loadTheme = async () => {
+      const savedTheme = await Storage.getItem('theme');
+      if (savedTheme === 'dark') {
+        setIsDark(true);
+      }
+      setIsLoading(false);
+    };
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    loadTheme();
+  }, []);
 
-### Step 2: Deploy your changes
+  // Save theme preference when it changes
+  const toggleTheme = async () => {
+    const newTheme = !isDark;
+    setIsDark(newTheme);
+    await Storage.setItem('theme', newTheme ? 'dark' : 'light');
+  };
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+  if (isLoading) {
+    return <Text>Loading...</Text>;
+  }
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  return (
+    <View style={[styles.container, isDark && styles.dark]}>
+      <Text style={[styles.text, isDark && styles.darkText]}>
+        Theme: {isDark ? 'Dark' : 'Light'}
+      </Text>
+      <Switch value={isDark} onValueChange={toggleTheme} />
+    </View>
+  );
+}
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  dark: {
+    backgroundColor: '#000',
+  },
+  text: {
+    fontSize: 20,
+    marginBottom: 20,
+    color: '#000',
+  },
+  darkText: {
+    color: '#fff',
+  },
+});
+```
 
-### Step 3: Go live
+### Using the sync API for theme loading
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+For immediate access during app initialization, use the sync API:
+
+```typescript App.tsx
+import { useState } from 'react';
+import Storage from 'expo-native-storage';
+
+export default function App() {
+  // Load theme synchronously during component initialization
+  const [isDark, setIsDark] = useState(() => {
+    const savedTheme = Storage.getItemSync('theme');
+    return savedTheme === 'dark';
+  });
+
+  const toggleTheme = () => {
+    const newTheme = !isDark;
+    setIsDark(newTheme);
+    // Save synchronously for immediate persistence
+    Storage.setItemSync('theme', newTheme ? 'dark' : 'light');
+  };
+
+  return (
+    <View style={[styles.container, isDark && styles.dark]}>
+      <Text style={[styles.text, isDark && styles.darkText]}>
+        Theme: {isDark ? 'Dark' : 'Light'}
+      </Text>
+      <Switch value={isDark} onValueChange={toggleTheme} />
+    </View>
+  );
+}
+```
+
+<Tip>
+  The sync API eliminates the loading state entirely, providing instant access to stored values during component initialization.
+</Tip>
+
+## Working with multiple values
+
+expo-native-storage supports batch operations for working with multiple keys:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Set multiple items at once
+await Storage.multiSet({
+  'username': 'john_doe',
+  'email': 'john@example.com',
+  'theme': 'dark'
+});
+
+// Get multiple items at once
+const values = await Storage.multiGet(['username', 'email', 'theme']);
+console.log(values);
+// { username: 'john_doe', email: 'john@example.com', theme: 'dark' }
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card
+    title="Async vs Sync APIs"
+    icon="code-compare"
+    href="/concepts/async-vs-sync"
+  >
+    Learn when to use async vs sync methods for optimal performance.
+  </Card>
+  <Card
+    title="Best Practices"
+    icon="star"
+    href="/guides/best-practices"
+  >
+    Discover patterns for error handling, type safety, and data management.
+  </Card>
+  <Card
+    title="API Reference"
+    icon="book"
+    href="/api/async-methods"
+  >
+    Explore all available methods and their complete type signatures.
+  </Card>
+  <Card
+    title="Performance"
+    icon="gauge-high"
+    href="/concepts/performance"
+  >
+    Learn why expo-native-storage is faster than AsyncStorage.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

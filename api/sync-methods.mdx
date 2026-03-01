@@ -1,0 +1,317 @@
+---
+title: 'Sync Methods'
+description: 'Synchronous methods for immediate storage operations'
+---
+
+Sync methods provide immediate, blocking storage operations without Promises. They are ideal for app initialization, reading config on startup, and settings screens.
+
+<Info>
+  **When to use sync vs async:**
+  - **Sync methods**: App initialization, reading config on startup, settings screens
+  - **Async methods**: When coordinating with other async operations, or when you prefer Promise-based code
+</Info>
+
+## setItemSync()
+
+Store a string value in storage synchronously.
+
+```typescript
+setItemSync(key: string, value: string): void
+```
+
+### Parameters
+
+<ParamField path="key" type="string" required>
+  The storage key to set
+</ParamField>
+
+<ParamField path="value" type="string" required>
+  The string value to store
+</ParamField>
+
+### Returns
+
+<ResponseField name="void" type="void">
+  Returns immediately after storing the value
+</ResponseField>
+
+### Example
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Store settings synchronously
+Storage.setItemSync('username', 'john_doe');
+Storage.setItemSync('theme', 'dark');
+
+// Use immediately after setting
+const theme = Storage.getItemSync('theme');
+```
+
+---
+
+## getItemSync()
+
+Retrieve a string value from storage synchronously.
+
+```typescript
+getItemSync(key: string): string | null
+```
+
+### Parameters
+
+<ParamField path="key" type="string" required>
+  The storage key to retrieve
+</ParamField>
+
+### Returns
+
+<ResponseField name="string | null" type="string | null">
+  The stored string value, or `null` if the key doesn't exist
+</ResponseField>
+
+### Example
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Get value on app startup
+function initializeApp() {
+  const theme = Storage.getItemSync('theme') || 'light';
+  const language = Storage.getItemSync('language') || 'en';
+  
+  applyTheme(theme);
+  setLanguage(language);
+}
+
+// Check authentication
+const authToken = Storage.getItemSync('authToken');
+if (!authToken) {
+  redirectToLogin();
+}
+```
+
+---
+
+## removeItemSync()
+
+Remove a single item from storage synchronously.
+
+```typescript
+removeItemSync(key: string): void
+```
+
+### Parameters
+
+<ParamField path="key" type="string" required>
+  The storage key to remove
+</ParamField>
+
+### Returns
+
+<ResponseField name="void" type="void">
+  Returns immediately after removing the item
+</ResponseField>
+
+### Example
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Remove a single item
+Storage.removeItemSync('username');
+
+// Clear user session
+function logout() {
+  Storage.removeItemSync('authToken');
+  Storage.removeItemSync('userId');
+  Storage.removeItemSync('userEmail');
+}
+```
+
+---
+
+## clearSync()
+
+Remove all items from storage synchronously.
+
+```typescript
+clearSync(): void
+```
+
+### Returns
+
+<ResponseField name="void" type="void">
+  Returns immediately after clearing all items
+</ResponseField>
+
+### Example
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Clear all storage on logout
+function logout() {
+  Storage.clearSync();
+  navigateToLogin();
+}
+
+// Reset app to defaults
+function resetApp() {
+  Storage.clearSync();
+  setDefaultSettings();
+}
+```
+
+<Warning>
+  This method removes **all** stored data. Use with caution.
+</Warning>
+
+---
+
+## setObjectSync()
+
+Store an object in storage synchronously by serializing it to JSON.
+
+```typescript
+setObjectSync<T extends Record<string, unknown>>(
+  key: string,
+  value: T
+): void
+```
+
+### Parameters
+
+<ParamField path="key" type="string" required>
+  The storage key to set
+</ParamField>
+
+<ParamField path="value" type="T extends Record<string, unknown>" required>
+  The object to store (will be serialized to JSON)
+</ParamField>
+
+### Returns
+
+<ResponseField name="void" type="void">
+  Returns immediately after storing the object
+</ResponseField>
+
+### Example
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Store user preferences
+Storage.setObjectSync('user', { 
+  name: 'John', 
+  age: 30,
+  premium: true 
+});
+
+// Store app configuration
+Storage.setObjectSync('config', {
+  theme: 'dark',
+  notifications: true,
+  language: 'en',
+  fontSize: 16
+});
+```
+
+<Note>
+  Objects are serialized using `JSON.stringify()`, so they must be JSON-serializable.
+</Note>
+
+---
+
+## getObjectSync()
+
+Retrieve an object from storage synchronously by deserializing from JSON.
+
+```typescript
+getObjectSync<T extends Record<string, unknown> = Record<string, unknown>>(
+  key: string
+): T | null
+```
+
+### Type Parameters
+
+<ParamField path="T" type="Record<string, unknown>" default="Record<string, unknown>">
+  The type of the object to retrieve. Defaults to a generic object type.
+</ParamField>
+
+### Parameters
+
+<ParamField path="key" type="string" required>
+  The storage key to retrieve
+</ParamField>
+
+### Returns
+
+<ResponseField name="T | null" type="T | null">
+  The deserialized object, or `null` if:
+  - The key doesn't exist
+  - The stored value is not valid JSON
+</ResponseField>
+
+### Example
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Get settings on app startup
+function initializeApp() {
+  const settings = Storage.getObjectSync('settings');
+  if (settings) {
+    applySettings(settings);
+  }
+}
+
+// With TypeScript type
+interface UserPreferences {
+  theme: string;
+  notifications: boolean;
+  language: string;
+}
+
+const prefs = Storage.getObjectSync<UserPreferences>('preferences');
+if (prefs) {
+  console.log(`Theme: ${prefs.theme}, Language: ${prefs.language}`);
+}
+```
+
+### Error Handling
+
+If the stored value cannot be parsed as JSON, `getObjectSync()` returns `null` instead of throwing an error:
+
+```typescript
+// Safe - returns null if JSON is invalid
+const data = Storage.getObjectSync('corrupted-key');
+if (data === null) {
+  // Use default values
+  data = getDefaultSettings();
+}
+```
+
+---
+
+## Performance Notes
+
+<Info>
+  **Sync vs Async Performance:**
+  - **Android Phone**: 1000 sync ops (98ms) vs 1000 async ops (472ms) = **4.8x faster**
+  - **iOS Phone**: 1000 sync ops (1098ms) vs 1000 async ops (1499ms) = **1.4x faster**
+</Info>
+
+Sync methods are faster because they:
+- Eliminate Promise overhead
+- Use direct native API calls
+- Avoid bridge serialization delays
+
+### iOS Considerations
+
+iOS sync methods are limited by UserDefaults disk I/O (~1ms per write). For bulk operations (1000+ writes), consider:
+- Batching operations
+- Using async methods with `multiSet()`
+- Using specialized libraries like [react-native-mmkv](https://github.com/mrousavy/react-native-mmkv) for extreme performance needs
+
+Sync methods are perfect for typical use cases like app settings and user preferences.

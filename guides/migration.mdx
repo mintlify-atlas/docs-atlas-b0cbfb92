@@ -1,0 +1,438 @@
+---
+title: Migration from AsyncStorage
+description: Step-by-step guide to migrate from AsyncStorage to expo-native-storage
+---
+
+expo-native-storage is a drop-in replacement for AsyncStorage with zero breaking changes. This guide will help you migrate your existing AsyncStorage code.
+
+## Why migrate?
+
+Migrating to expo-native-storage provides:
+
+- **15x faster** on Android (up to 32x with scale)
+- **19x smaller** bundle size (19.6KB vs 381KB)
+- **Sync API** for immediate access without Promises
+- **Same API** - minimal code changes required
+
+## Quick migration
+
+The simplest migration is a direct import replacement:
+
+### Before (AsyncStorage)
+
+```typescript
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+await AsyncStorage.setItem('key', 'value');
+const value = await AsyncStorage.getItem('key');
+await AsyncStorage.removeItem('key');
+await AsyncStorage.clear();
+```
+
+### After (expo-native-storage)
+
+```typescript
+import Storage from 'expo-native-storage';
+
+await Storage.setItem('key', 'value');
+const value = await Storage.getItem('key');
+await Storage.removeItem('key');
+await Storage.clear();
+```
+
+<Tip>
+  Simply replace the import statement. All method signatures are identical.
+</Tip>
+
+## Step-by-step migration
+
+<Steps>
+  <Step title="Install expo-native-storage">
+    Add expo-native-storage to your project:
+
+    <CodeGroup>
+
+    ```bash npm
+    npx expo install expo-native-storage
+    ```
+
+    ```bash yarn
+    yarn add expo-native-storage
+    ```
+
+    ```bash pnpm
+    pnpm add expo-native-storage
+    ```
+
+    ```bash bun
+    bunx expo install expo-native-storage
+    ```
+
+    </CodeGroup>
+  </Step>
+
+  <Step title="Rebuild your app">
+    expo-native-storage requires native code, so rebuild your app:
+
+    ```bash
+    npx expo prebuild --clean
+    npx expo run:ios  # or run:android
+    ```
+  </Step>
+
+  <Step title="Replace imports">
+    Update all AsyncStorage imports in your codebase:
+
+    ```typescript
+    // Before
+    import AsyncStorage from '@react-native-async-storage/async-storage';
+
+    // After
+    import Storage from 'expo-native-storage';
+    ```
+
+    Use find-and-replace in your editor to update all files at once:
+    - Find: `from '@react-native-async-storage/async-storage'`
+    - Replace: `from 'expo-native-storage'`
+  </Step>
+
+  <Step title="Update method calls">
+    Replace `AsyncStorage` with `Storage` in all method calls:
+
+    ```typescript
+    // Before
+    await AsyncStorage.setItem('key', 'value');
+    const value = await AsyncStorage.getItem('key');
+
+    // After
+    await Storage.setItem('key', 'value');
+    const value = await Storage.getItem('key');
+    ```
+
+    Use find-and-replace:
+    - Find: `AsyncStorage.`
+    - Replace: `Storage.`
+  </Step>
+
+  <Step title="Test your app">
+    Run your app and verify all storage operations work correctly:
+
+    ```typescript
+    // Test basic operations
+    await Storage.setItem('test', 'value');
+    const result = await Storage.getItem('test');
+    console.log(result); // Should log 'value'
+    ```
+  </Step>
+
+  <Step title="Remove AsyncStorage (optional)">
+    Once migration is complete, uninstall AsyncStorage:
+
+    <CodeGroup>
+
+    ```bash npm
+    npm uninstall @react-native-async-storage/async-storage
+    ```
+
+    ```bash yarn
+    yarn remove @react-native-async-storage/async-storage
+    ```
+
+    ```bash pnpm
+    pnpm remove @react-native-async-storage/async-storage
+    ```
+
+    ```bash bun
+    bun remove @react-native-async-storage/async-storage
+    ```
+
+    </CodeGroup>
+  </Step>
+</Steps>
+
+## API compatibility
+
+expo-native-storage implements all common AsyncStorage methods:
+
+### Fully compatible methods
+
+| AsyncStorage Method | expo-native-storage | Notes |
+|---------------------|---------------------|-------|
+| `setItem(key, value)` | ✅ `setItem(key, value)` | Identical |
+| `getItem(key)` | ✅ `getItem(key)` | Identical |
+| `removeItem(key)` | ✅ `removeItem(key)` | Identical |
+| `clear()` | ✅ `clear()` | Identical |
+| `multiSet(items)` | ✅ `multiSet(items)` | Identical |
+| `multiGet(keys)` | ✅ `multiGet(keys)` | Identical |
+
+### Additional methods in expo-native-storage
+
+expo-native-storage provides extra functionality:
+
+| Method | Description |
+|--------|-------------|
+| `setObject(key, object)` | Store objects directly (auto JSON.stringify) |
+| `getObject<T>(key)` | Retrieve objects with type safety |
+| `setItemSync(key, value)` | Synchronous string storage |
+| `getItemSync(key)` | Synchronous string retrieval |
+| `setObjectSync(key, object)` | Synchronous object storage |
+| `getObjectSync<T>(key)` | Synchronous object retrieval |
+| `removeItemSync(key)` | Synchronous item removal |
+| `clearSync()` | Synchronous clear all |
+
+## Migration examples
+
+### Example 1: User authentication
+
+<CodeGroup>
+
+```typescript Before (AsyncStorage)
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const login = async (token: string) => {
+  await AsyncStorage.setItem('authToken', token);
+};
+
+const getToken = async () => {
+  return await AsyncStorage.getItem('authToken');
+};
+
+const logout = async () => {
+  await AsyncStorage.removeItem('authToken');
+};
+```
+
+```typescript After (expo-native-storage)
+import Storage from 'expo-native-storage';
+
+const login = async (token: string) => {
+  await Storage.setItem('authToken', token);
+};
+
+const getToken = async () => {
+  return await Storage.getItem('authToken');
+};
+
+const logout = async () => {
+  await Storage.removeItem('authToken');
+};
+```
+
+</CodeGroup>
+
+### Example 2: User preferences
+
+<CodeGroup>
+
+```typescript Before (AsyncStorage)
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const savePreferences = async (prefs: UserPrefs) => {
+  await AsyncStorage.setItem('preferences', JSON.stringify(prefs));
+};
+
+const loadPreferences = async () => {
+  const json = await AsyncStorage.getItem('preferences');
+  return json ? JSON.parse(json) : null;
+};
+```
+
+```typescript After (expo-native-storage)
+import Storage from 'expo-native-storage';
+
+// Use the new setObject/getObject methods
+const savePreferences = async (prefs: UserPrefs) => {
+  await Storage.setObject('preferences', prefs);
+};
+
+const loadPreferences = async () => {
+  return await Storage.getObject<UserPrefs>('preferences');
+};
+```
+
+</CodeGroup>
+
+<Tip>
+  expo-native-storage's `setObject` and `getObject` methods handle JSON serialization automatically, eliminating boilerplate code.
+</Tip>
+
+### Example 3: Theme persistence with sync API
+
+<CodeGroup>
+
+```typescript Before (AsyncStorage)
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState('light');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    AsyncStorage.getItem('theme').then(savedTheme => {
+      if (savedTheme) setTheme(savedTheme);
+      setLoading(false);
+    });
+  }, []);
+
+  const updateTheme = async (newTheme: string) => {
+    setTheme(newTheme);
+    await AsyncStorage.setItem('theme', newTheme);
+  };
+
+  if (loading) return <LoadingScreen />;
+  
+  return <ThemeContext.Provider value={{ theme, updateTheme }}>{children}</ThemeContext.Provider>;
+}
+```
+
+```typescript After (expo-native-storage)
+import Storage from 'expo-native-storage';
+
+function ThemeProvider({ children }) {
+  // Load synchronously - no loading state needed!
+  const [theme, setTheme] = useState(() => 
+    Storage.getItemSync('theme') || 'light'
+  );
+
+  const updateTheme = (newTheme: string) => {
+    setTheme(newTheme);
+    // Save synchronously
+    Storage.setItemSync('theme', newTheme);
+  };
+
+  return <ThemeContext.Provider value={{ theme, updateTheme }}>{children}</ThemeContext.Provider>;
+}
+```
+
+</CodeGroup>
+
+<Note>
+  The sync API eliminates loading states and reduces code complexity by providing immediate access to stored values.
+</Note>
+
+## Data migration
+
+Your existing AsyncStorage data will **not** automatically transfer to expo-native-storage. To migrate existing data:
+
+```typescript migration.ts
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Storage from 'expo-native-storage';
+
+export async function migrateData() {
+  try {
+    // Get all keys from AsyncStorage
+    const keys = await AsyncStorage.getAllKeys();
+    
+    // Migrate each key
+    for (const key of keys) {
+      const value = await AsyncStorage.getItem(key);
+      if (value !== null) {
+        await Storage.setItem(key, value);
+      }
+    }
+    
+    console.log(`Migrated ${keys.length} keys from AsyncStorage`);
+    
+    // Optional: Clear AsyncStorage after successful migration
+    // await AsyncStorage.clear();
+  } catch (error) {
+    console.error('Migration failed:', error);
+  }
+}
+```
+
+Run the migration once on app startup:
+
+```typescript App.tsx
+import { useEffect, useState } from 'react';
+import { migrateData } from './migration';
+
+export default function App() {
+  const [isMigrated, setIsMigrated] = useState(false);
+
+  useEffect(() => {
+    const migrate = async () => {
+      // Check if already migrated
+      const migrated = Storage.getItemSync('migration_complete');
+      
+      if (!migrated) {
+        await migrateData();
+        Storage.setItemSync('migration_complete', 'true');
+      }
+      
+      setIsMigrated(true);
+    };
+
+    migrate();
+  }, []);
+
+  if (!isMigrated) return <LoadingScreen />;
+
+  return <MainApp />;
+}
+```
+
+## Breaking changes
+
+expo-native-storage has **no breaking changes** from AsyncStorage for common operations. However, note these differences:
+
+<AccordionGroup>
+  <Accordion title="getAllKeys method not implemented">
+    AsyncStorage's `getAllKeys()` is not currently available in expo-native-storage.
+
+    **Workaround**: Track keys manually:
+
+    ```typescript
+    // Store a list of keys
+    const keys = Storage.getObjectSync<string[]>('_keys') || [];
+    
+    // Add key when storing
+    const setItemTracked = async (key: string, value: string) => {
+      await Storage.setItem(key, value);
+      const keys = Storage.getObjectSync<string[]>('_keys') || [];
+      if (!keys.includes(key)) {
+        Storage.setObjectSync('_keys', [...keys, key]);
+      }
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="mergeItem not implemented">
+    AsyncStorage's `mergeItem()` is not available.
+
+    **Workaround**: Read, merge, and write manually:
+
+    ```typescript
+    const mergeObject = async (key: string, updates: Record<string, any>) => {
+      const existing = await Storage.getObject(key) || {};
+      const merged = { ...existing, ...updates };
+      await Storage.setObject(key, merged);
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="Different storage locations">
+    expo-native-storage uses platform-native storage (UserDefaults/SharedPreferences) while AsyncStorage uses SQLite.
+
+    **Impact**: Existing AsyncStorage data won't automatically appear in expo-native-storage. Use the data migration script above if needed.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Best Practices"
+    icon="star"
+    href="/guides/best-practices"
+  >
+    Learn patterns for effective storage usage.
+  </Card>
+  <Card
+    title="Troubleshooting"
+    icon="wrench"
+    href="/guides/troubleshooting"
+  >
+    Resolve common migration issues.
+  </Card>
+</CardGroup>

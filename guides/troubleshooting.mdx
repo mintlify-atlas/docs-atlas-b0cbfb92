@@ -1,0 +1,434 @@
+---
+title: Troubleshooting
+description: Solutions to common issues when using expo-native-storage
+---
+
+This guide covers common issues and their solutions when using expo-native-storage.
+
+## Common errors
+
+<AccordionGroup>
+  <Accordion title="Error: Cannot find native module 'ExpoNativeStorage'">
+    This error means the native module isn't linked properly. This is the most common issue when first installing expo-native-storage.
+
+    ### Solutions
+
+    **1. Rebuild your app after installation**
+
+    The native module requires a rebuild to link properly:
+
+    ```bash
+    npx expo prebuild --clean
+    npx expo run:ios  # or run:android
+    ```
+
+    The `--clean` flag removes existing native directories before generating new ones.
+
+    **2. Clear all caches**
+
+    If rebuilding doesn't work, clear all caches:
+
+    ```bash
+    # Clear Metro bundler cache
+    npx expo start -c
+    
+    # Clear node_modules and reinstall
+    rm -rf node_modules
+    npm install  # or yarn install, pnpm install, bun install
+    
+    # Clean prebuild and rebuild
+    npx expo prebuild --clean
+    npx expo run:ios  # or run:android
+    ```
+
+    **3. Verify you're not using Expo Go**
+
+    expo-native-storage requires native code and **does not work with Expo Go**. You must use a development build:
+
+    ```bash
+    # Create a development build
+    npx expo prebuild
+    npx expo run:ios  # or run:android
+    ```
+
+    **4. Verify the package is installed**
+
+    Check that expo-native-storage is in your `package.json`:
+
+    ```json package.json
+    {
+      "dependencies": {
+        "expo-native-storage": "^0.2.0"
+      }
+    }
+    ```
+
+    If it's missing, install it:
+
+    ```bash
+    npx expo install expo-native-storage
+    ```
+  </Accordion>
+
+  <Accordion title="iOS: Module not found in Podfile.lock">
+    If the module isn't linking on iOS, verify it appears in the Podfile.
+
+    ### Solutions
+
+    **1. Check Podfile.lock**
+
+    Verify the module is in your `ios/Podfile.lock`:
+
+    ```bash
+    grep -i "ExpoNativeStorage" ios/Podfile.lock
+    ```
+
+    If it's missing, reinstall pods:
+
+    ```bash
+    cd ios
+    rm -rf Pods Podfile.lock
+    pod install
+    cd ..
+    npx expo run:ios
+    ```
+
+    **2. Clean build folder**
+
+    Clean the iOS build folder and rebuild:
+
+    ```bash
+    cd ios
+    xcodebuild clean
+    cd ..
+    npx expo run:ios
+    ```
+
+    **3. Prebuild from scratch**
+
+    Remove the iOS directory and prebuild:
+
+    ```bash
+    rm -rf ios
+    npx expo prebuild
+    npx expo run:ios
+    ```
+  </Accordion>
+
+  <Accordion title="Android: Module not found in build.gradle">
+    If the module isn't linking on Android, verify the gradle configuration.
+
+    ### Solutions
+
+    **1. Check gradle dependencies**
+
+    Verify the module is in your Android dependencies:
+
+    ```bash
+    cd android
+    ./gradlew :app:dependencies | grep expo-native-storage
+    cd ..
+    ```
+
+    **2. Clean gradle cache**
+
+    Clean the gradle cache and rebuild:
+
+    ```bash
+    cd android
+    ./gradlew clean
+    cd ..
+    npx expo run:android
+    ```
+
+    **3. Prebuild from scratch**
+
+    Remove the Android directory and prebuild:
+
+    ```bash
+    rm -rf android
+    npx expo prebuild
+    npx expo run:android
+    ```
+  </Accordion>
+
+  <Accordion title="TypeError: Cannot read property 'setItem' of undefined">
+    This error occurs when trying to use Storage before it's properly imported.
+
+    ### Solution
+
+    Verify you're importing Storage correctly:
+
+    ```typescript
+    // Correct import
+    import Storage from 'expo-native-storage';
+
+    // Then use it
+    await Storage.setItem('key', 'value');
+
+    // Wrong: Don't destructure the default export
+    import { Storage } from 'expo-native-storage'; // This won't work
+    ```
+  </Accordion>
+
+  <Accordion title="Web: QuotaExceededError">
+    This error occurs when localStorage exceeds the browser's storage quota (typically 5-10MB).
+
+    ### Solutions
+
+    **1. Reduce data size**
+
+    Store less data or split large objects into smaller chunks:
+
+    ```typescript
+    // Avoid: Storing large data
+    Storage.setObjectSync('largeData', massiveArray);
+
+    // Better: Store only what's needed
+    Storage.setObjectSync('recentItems', recentItems.slice(0, 100));
+    ```
+
+    **2. Handle quota errors gracefully**
+
+    Catch and handle quota errors:
+
+    ```typescript
+    try {
+      await Storage.setItem('key', value);
+    } catch (error) {
+      if (error.name === 'QuotaExceededError') {
+        console.warn('Storage quota exceeded');
+        // Clear old data or show user a warning
+        await Storage.clear();
+      }
+    }
+    ```
+
+    **3. Clear old data periodically**
+
+    Implement a cleanup strategy:
+
+    ```typescript
+    const clearOldData = () => {
+      const keys = ['cache1', 'cache2', 'cache3'];
+      keys.forEach(key => Storage.removeItemSync(key));
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="Data not persisting between app restarts">
+    If data isn't persisting, verify you're calling the storage methods correctly.
+
+    ### Solutions
+
+    **1. Verify writes complete**
+
+    Ensure async writes complete before the app closes:
+
+    ```typescript
+    // Good: Wait for write to complete
+    const saveData = async () => {
+      await Storage.setItem('key', 'value');
+      console.log('Data saved');
+    };
+
+    // Avoid: Not awaiting
+    const saveData = async () => {
+      Storage.setItem('key', 'value'); // May not complete!
+    };
+    ```
+
+    **2. Use sync methods for critical data**
+
+    Sync methods ensure immediate persistence:
+
+    ```typescript
+    // Guaranteed to persist immediately
+    Storage.setItemSync('criticalData', value);
+    ```
+
+    **3. Verify you're using the correct keys**
+
+    Check for typos in key names:
+
+    ```typescript
+    // Good: Use constants
+    const THEME_KEY = 'theme';
+    Storage.setItemSync(THEME_KEY, 'dark');
+    const theme = Storage.getItemSync(THEME_KEY);
+
+    // Avoid: Inline strings with typos
+    Storage.setItemSync('theme', 'dark');
+    const theme = Storage.getItemSync('theem'); // Typo!
+    ```
+  </Accordion>
+
+  <Accordion title="iOS: Data cleared after app update">
+    UserDefaults data persists between app updates by default. If data is being cleared, check your implementation.
+
+    ### Solutions
+
+    **1. Don't call clear() unnecessarily**
+
+    ```typescript
+    // Avoid: Clearing on every launch
+    useEffect(() => {
+      Storage.clearSync(); // This clears everything!
+    }, []);
+    ```
+
+    **2. Check app uninstall/reinstall**
+
+    Data is cleared when the app is uninstalled. This is expected behavior.
+
+    **3. Verify bundle identifier hasn't changed**
+
+    Changing your app's bundle ID creates a new storage domain, losing previous data.
+  </Accordion>
+
+  <Accordion title="Android: Data cleared after app update">
+    SharedPreferences data persists between app updates. If data is being cleared, verify your implementation.
+
+    ### Solutions
+
+    **1. Check storage permissions**
+
+    Verify your app has storage permissions in `AndroidManifest.xml`. expo-native-storage doesn't require special permissions, but some devices may behave differently.
+
+    **2. Don't call clear() unnecessarily**
+
+    ```typescript
+    // Avoid: Clearing on every launch
+    useEffect(() => {
+      Storage.clearSync(); // This clears everything!
+    }, []);
+    ```
+
+    **3. Check package name hasn't changed**
+
+    Changing your package name creates new storage, losing previous data.
+  </Accordion>
+</AccordionGroup>
+
+## Verification steps
+
+Follow these steps to verify expo-native-storage is working correctly:
+
+<Steps>
+  <Step title="Check installation">
+    Verify the package is in your `package.json`:
+
+    ```bash
+    grep expo-native-storage package.json
+    ```
+
+    Expected output:
+    ```
+    "expo-native-storage": "^0.2.0"
+    ```
+  </Step>
+
+  <Step title="Verify native linking (iOS)">
+    Check that the module appears in your Podfile.lock:
+
+    ```bash
+    grep -i "ExpoNativeStorage" ios/Podfile.lock
+    ```
+
+    If this returns results, the module is linked on iOS.
+  </Step>
+
+  <Step title="Verify native linking (Android)">
+    Check gradle dependencies:
+
+    ```bash
+    cd android && ./gradlew :app:dependencies | grep expo-native-storage
+    ```
+
+    If this returns results, the module is linked on Android.
+  </Step>
+
+  <Step title="Test basic operations">
+    Create a simple test in your app:
+
+    ```typescript TestStorage.tsx
+    import { useEffect } from 'react';
+    import { View, Text } from 'react-native';
+    import Storage from 'expo-native-storage';
+
+    export default function TestStorage() {
+      useEffect(() => {
+        const test = async () => {
+          // Test async methods
+          await Storage.setItem('test', 'async works');
+          const asyncResult = await Storage.getItem('test');
+          console.log('Async test:', asyncResult);
+
+          // Test sync methods
+          Storage.setItemSync('test-sync', 'sync works');
+          const syncResult = Storage.getItemSync('test-sync');
+          console.log('Sync test:', syncResult);
+
+          // Test object storage
+          Storage.setObjectSync('test-obj', { works: true });
+          const objResult = Storage.getObjectSync('test-obj');
+          console.log('Object test:', objResult);
+        };
+
+        test();
+      }, []);
+
+      return (
+        <View>
+          <Text>Check console for test results</Text>
+        </View>
+      );
+    }
+    ```
+
+    Expected console output:
+    ```
+    Async test: async works
+    Sync test: sync works
+    Object test: { works: true }
+    ```
+  </Step>
+</Steps>
+
+## Getting help
+
+If you're still experiencing issues after trying these solutions:
+
+1. **Check the GitHub issues** - Search for similar issues: [expo-native-storage/issues](https://github.com/thereallo1026/expo-native-storage/issues)
+
+2. **Create a new issue** with:
+   - Your Expo SDK version (`expo --version`)
+   - React Native version (from `package.json`)
+   - Platform (iOS/Android/Web)
+   - Full error message and stack trace
+   - Whether you're using Expo Go or a development build
+   - Steps to reproduce the issue
+
+3. **Verify requirements**:
+   - Expo SDK 50+ required
+   - Development builds required (not Expo Go)
+   - Native code must be linked via `expo prebuild`
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Installation Guide"
+    icon="download"
+    href="/installation"
+  >
+    Review the installation steps to ensure proper setup.
+  </Card>
+  <Card
+    title="Best Practices"
+    icon="star"
+    href="/guides/best-practices"
+  >
+    Learn patterns for effective storage usage.
+  </Card>
+</CardGroup>

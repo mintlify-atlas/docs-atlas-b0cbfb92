@@ -1,0 +1,487 @@
+---
+title: Best Practices
+description: Patterns and recommendations for using expo-native-storage effectively
+---
+
+Follow these best practices to get the most out of expo-native-storage while avoiding common pitfalls.
+
+## Choosing between async and sync
+
+### Use sync methods for initialization
+
+Sync methods eliminate loading states and provide instant access during component initialization:
+
+```typescript
+import { useState } from 'react';
+import Storage from 'expo-native-storage';
+
+// Good: Sync method during initialization
+function App() {
+  const [theme, setTheme] = useState(() => 
+    Storage.getItemSync('theme') || 'light'
+  );
+  
+  return <ThemedApp theme={theme} />;
+}
+
+// Avoid: Async method with loading state
+function App() {
+  const [theme, setTheme] = useState('light');
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    Storage.getItem('theme').then(savedTheme => {
+      if (savedTheme) setTheme(savedTheme);
+      setLoading(false);
+    });
+  }, []);
+  
+  if (loading) return <LoadingScreen />; // Extra loading state
+  return <ThemedApp theme={theme} />;
+}
+```
+
+### Use async methods for network coordination
+
+When combining storage with API calls, async methods keep code consistent:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Good: Async flow with network operations
+async function loadUserData() {
+  // Load cached data
+  const cached = await Storage.getObject('user');
+  
+  // Fetch fresh data
+  const response = await fetch('/api/user');
+  const fresh = await response.json();
+  
+  // Update cache
+  await Storage.setObject('user', fresh);
+  
+  return fresh;
+}
+```
+
+## Data size considerations
+
+### Keep values small
+
+expo-native-storage is optimized for small key-value data:
+
+```typescript
+// Good: Small configuration objects
+Storage.setObjectSync('settings', {
+  theme: 'dark',
+  language: 'en',
+  notifications: true
+});
+
+// Avoid: Large data arrays
+Storage.setObjectSync('allProducts', hugeProductArray); // Use a database instead
+```
+
+### Platform-specific limits
+
+<AccordionGroup>
+  <Accordion title="iOS: ~1MB per key">
+    UserDefaults is optimized for small values. Keep individual values under 1MB:
+
+    ```typescript
+    // Good: Small user preferences
+    Storage.setObjectSync('userPrefs', { theme: 'dark', fontSize: 16 });
+    
+    // Avoid: Large files or images
+    Storage.setItemSync('image', base64Image); // Use expo-file-system instead
+    ```
+  </Accordion>
+
+  <Accordion title="Android: No strict limit">
+    SharedPreferences loads all data into memory. Keep total storage size reasonable:
+
+    ```typescript
+    // Good: Reasonable amount of key-value data
+    for (let i = 0; i < 100; i++) {
+      Storage.setItemSync(`setting_${i}`, value);
+    }
+    
+    // Avoid: Thousands of keys
+    for (let i = 0; i < 10000; i++) {
+      Storage.setItemSync(`item_${i}`, value); // Use SQLite instead
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Web: 5-10MB per origin">
+    localStorage has strict quotas. Handle quota errors gracefully:
+
+    ```typescript
+    try {
+      await Storage.setItem('key', largeValue);
+    } catch (error) {
+      if (error.name === 'QuotaExceededError') {
+        // Clear old data or warn user
+        console.warn('Storage quota exceeded');
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Error handling
+
+### Handle missing values gracefully
+
+Always provide fallback values for missing keys:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Good: Fallback for missing value
+const theme = Storage.getItemSync('theme') || 'light';
+
+// Good: Type-safe with null check
+const user = Storage.getObjectSync<User>('user');
+if (user) {
+  console.log(user.name);
+} else {
+  console.log('No user found');
+}
+
+// Avoid: Assuming value exists
+const theme = Storage.getItemSync('theme');
+console.log(theme.toUpperCase()); // Crashes if null
+```
+
+### Wrap operations in try-catch
+
+Handle potential errors when writing data:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Good: Error handling
+try {
+  await Storage.setObject('data', largeObject);
+} catch (error) {
+  console.error('Failed to save data:', error);
+  // Show user-friendly error message
+}
+
+// Good: Sync error handling
+try {
+  Storage.setItemSync('key', value);
+} catch (error) {
+  console.error('Failed to save:', error);
+}
+```
+
+## Type safety with TypeScript
+
+### Use generic types with objects
+
+Provide type parameters for type-safe object storage:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+interface UserPreferences {
+  theme: 'light' | 'dark';
+  language: string;
+  notifications: boolean;
+}
+
+// Good: Type-safe storage
+const savePrefs = (prefs: UserPreferences) => {
+  Storage.setObjectSync('prefs', prefs);
+};
+
+const loadPrefs = (): UserPreferences => {
+  const prefs = Storage.getObjectSync<UserPreferences>('prefs');
+  return prefs || { theme: 'light', language: 'en', notifications: true };
+};
+
+// Usage is type-safe
+const prefs = loadPrefs();
+console.log(prefs.theme); // TypeScript knows this is 'light' | 'dark'
+```
+
+### Create typed storage helpers
+
+Build type-safe wrappers for common operations:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+class TypedStorage {
+  static set<T>(key: string, value: T): void {
+    if (typeof value === 'string') {
+      Storage.setItemSync(key, value);
+    } else {
+      Storage.setObjectSync(key, value as Record<string, unknown>);
+    }
+  }
+
+  static get<T>(key: string, defaultValue: T): T {
+    const value = Storage.getObjectSync<T>(key);
+    return value ?? defaultValue;
+  }
+}
+
+// Usage
+interface AppConfig {
+  apiUrl: string;
+  timeout: number;
+}
+
+const defaultConfig: AppConfig = {
+  apiUrl: 'https://api.example.com',
+  timeout: 5000
+};
+
+TypedStorage.set('config', defaultConfig);
+const config = TypedStorage.get('config', defaultConfig);
+```
+
+## Performance optimization
+
+### Cache values in memory
+
+Avoid unnecessary reads by caching values in memory:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Good: Read once, cache in memory
+class ConfigManager {
+  private static cache: AppConfig | null = null;
+
+  static getConfig(): AppConfig {
+    if (!this.cache) {
+      this.cache = Storage.getObjectSync('config') || defaultConfig;
+    }
+    return this.cache;
+  }
+
+  static setConfig(config: AppConfig) {
+    this.cache = config;
+    Storage.setObjectSync('config', config);
+  }
+}
+
+// Avoid: Reading on every access
+function getApiUrl() {
+  const config = Storage.getObjectSync('config'); // Re-reads every time
+  return config?.apiUrl;
+}
+```
+
+### Use batch operations
+
+Batch multiple operations for better performance:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Good: Batch write
+await Storage.multiSet({
+  'key1': 'value1',
+  'key2': 'value2',
+  'key3': 'value3'
+});
+
+// Avoid: Individual writes
+await Storage.setItem('key1', 'value1');
+await Storage.setItem('key2', 'value2');
+await Storage.setItem('key3', 'value3');
+
+// Good: Batch read
+const values = await Storage.multiGet(['key1', 'key2', 'key3']);
+
+// Avoid: Individual reads
+const val1 = await Storage.getItem('key1');
+const val2 = await Storage.getItem('key2');
+const val3 = await Storage.getItem('key3');
+```
+
+### Debounce frequent writes
+
+Avoid writing on every change:
+
+```typescript
+import { useEffect, useState } from 'react';
+import Storage from 'expo-native-storage';
+
+function usePersistedState<T>(key: string, initial: T) {
+  const [value, setValue] = useState<T>(() => 
+    Storage.getObjectSync(key) ?? initial
+  );
+
+  // Debounce writes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      Storage.setObjectSync(key, value);
+    }, 500); // Write 500ms after last change
+
+    return () => clearTimeout(timer);
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
+```
+
+## Organizing storage keys
+
+### Use consistent naming conventions
+
+Adopt a clear naming scheme for keys:
+
+```typescript
+// Good: Namespaced keys
+Storage.setItemSync('user:id', userId);
+Storage.setItemSync('user:name', userName);
+Storage.setItemSync('settings:theme', theme);
+Storage.setItemSync('settings:language', language);
+Storage.setItemSync('cache:products', products);
+
+// Avoid: Inconsistent naming
+Storage.setItemSync('userId', userId);
+Storage.setItemSync('user_name', userName);
+Storage.setItemSync('THEME', theme);
+Storage.setItemSync('lang', language);
+```
+
+### Create key constants
+
+Define keys as constants to avoid typos:
+
+```typescript
+// constants/storage.ts
+export const StorageKeys = {
+  USER_ID: 'user:id',
+  USER_NAME: 'user:name',
+  AUTH_TOKEN: 'auth:token',
+  THEME: 'settings:theme',
+  LANGUAGE: 'settings:language',
+} as const;
+
+// Usage
+import { StorageKeys } from './constants/storage';
+import Storage from 'expo-native-storage';
+
+Storage.setItemSync(StorageKeys.THEME, 'dark');
+const theme = Storage.getItemSync(StorageKeys.THEME);
+```
+
+## Security considerations
+
+### Don't store sensitive data unencrypted
+
+expo-native-storage does not encrypt data. Use expo-secure-store for sensitive information:
+
+```typescript
+import Storage from 'expo-native-storage';
+import * as SecureStore from 'expo-secure-store';
+
+// Good: Non-sensitive data
+Storage.setItemSync('theme', 'dark');
+Storage.setItemSync('language', 'en');
+
+// Avoid: Sensitive data in plain storage
+Storage.setItemSync('password', userPassword); // NOT SECURE
+Storage.setItemSync('creditCard', cardNumber); // NOT SECURE
+
+// Good: Use secure store for sensitive data
+await SecureStore.setItemAsync('password', userPassword);
+await SecureStore.setItemAsync('apiKey', apiKey);
+```
+
+### Validate data after reading
+
+Always validate data read from storage:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+interface UserData {
+  id: string;
+  name: string;
+  email: string;
+}
+
+function validateUser(data: any): data is UserData {
+  return (
+    typeof data === 'object' &&
+    typeof data.id === 'string' &&
+    typeof data.name === 'string' &&
+    typeof data.email === 'string'
+  );
+}
+
+// Good: Validate after reading
+const userData = Storage.getObjectSync('user');
+if (validateUser(userData)) {
+  console.log(userData.email);
+} else {
+  console.error('Invalid user data in storage');
+}
+```
+
+## Testing
+
+### Mock storage in tests
+
+Create a mock implementation for testing:
+
+```typescript
+// __mocks__/expo-native-storage.ts
+const storage = new Map<string, string>();
+
+export default {
+  setItem: jest.fn((key: string, value: string) => {
+    storage.set(key, value);
+    return Promise.resolve();
+  }),
+  getItem: jest.fn((key: string) => {
+    return Promise.resolve(storage.get(key) || null);
+  }),
+  setItemSync: jest.fn((key: string, value: string) => {
+    storage.set(key, value);
+  }),
+  getItemSync: jest.fn((key: string) => {
+    return storage.get(key) || null;
+  }),
+  clear: jest.fn(() => {
+    storage.clear();
+    return Promise.resolve();
+  }),
+  clearSync: jest.fn(() => {
+    storage.clear();
+  }),
+};
+
+// Clear storage between tests
+afterEach(() => {
+  storage.clear();
+});
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="API Reference"
+    icon="book"
+    href="/api/async-methods"
+  >
+    Explore all available methods and their signatures.
+  </Card>
+  <Card
+    title="Troubleshooting"
+    icon="wrench"
+    href="/guides/troubleshooting"
+  >
+    Resolve common issues and errors.
+  </Card>
+</CardGroup>

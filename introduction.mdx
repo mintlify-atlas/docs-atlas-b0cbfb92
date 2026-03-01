@@ -1,0 +1,105 @@
+---
+title: Introduction
+description: Lightning-fast native storage for Expo using UserDefaults and SharedPreferences
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="Hero Light"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="Hero Dark"
+/>
+
+## Get started with expo-native-storage
+
+expo-native-storage provides lightning-fast native storage for Expo applications. It leverages platform-native storage APIs (UserDefaults on iOS, SharedPreferences on Android) to deliver superior performance compared to traditional storage solutions.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card
+    title="Lightning fast"
+    icon="bolt"
+  >
+    Direct native storage with no bridge delays. Up to 15x faster than AsyncStorage on Android.
+  </Card>
+  <Card
+    title="Incredibly lightweight"
+    icon="feather"
+  >
+    19x smaller bundle size (19.6KB vs 381KB) compared to AsyncStorage.
+  </Card>
+  <Card
+    title="Native performance"
+    icon="mobile"
+  >
+    Uses UserDefaults on iOS and SharedPreferences on Android for optimal performance.
+  </Card>
+  <Card
+    title="Scales effortlessly"
+    icon="arrow-trend-up"
+  >
+    Performance improves with usage thanks to in-memory caching on Android.
+  </Card>
+</CardGroup>
+
+## Quick example
+
+Get started with expo-native-storage in seconds:
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Store strings
+await Storage.setItem('username', 'john_doe');
+const username = await Storage.getItem('username'); // 'john_doe'
+
+// Store objects
+await Storage.setObject('user', { 
+  name: 'John', 
+  age: 30,
+  premium: true 
+});
+const user = await Storage.getObject('user');
+
+// Use synchronous methods for immediate access
+Storage.setItemSync('theme', 'dark');
+const theme = Storage.getItemSync('theme'); // 'dark'
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Installation"
+    icon="download"
+    href="/installation"
+  >
+    Install expo-native-storage and set up your development environment.
+  </Card>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Build your first app with expo-native-storage in minutes.
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api/async-methods"
+  >
+    Explore all available methods and their signatures.
+  </Card>
+  <Card
+    title="Migration Guide"
+    icon="arrow-right-arrow-left"
+    href="/guides/migration"
+  >
+    Migrate from AsyncStorage with zero breaking changes.
+  </Card>
+</CardGroup>

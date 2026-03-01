@@ -1,0 +1,116 @@
+---
+title: Installation
+description: Install expo-native-storage in your Expo project
+---
+
+## Requirements
+
+Before installing expo-native-storage, ensure your project meets these requirements:
+
+- **Expo SDK 50+** - This module requires Expo SDK version 50 or higher
+- **Development builds** - This module requires native code and will **not** work with Expo Go
+
+## Install the package
+
+<Steps>
+  <Step title="Install expo-native-storage">
+    Add expo-native-storage to your project using your preferred package manager:
+
+    <CodeGroup>
+
+    ```bash npm
+    npx expo install expo-native-storage
+    ```
+
+    ```bash yarn
+    yarn add expo-native-storage
+    ```
+
+    ```bash pnpm
+    pnpm add expo-native-storage
+    ```
+
+    ```bash bun
+    bunx expo install expo-native-storage
+    ```
+
+    </CodeGroup>
+
+    <Warning>
+      This module requires native code and will **not** work with Expo Go. You must create a development build or production build to use expo-native-storage.
+    </Warning>
+  </Step>
+
+  <Step title="Prebuild your project">
+    After installation, generate the native iOS and Android directories:
+
+    ```bash
+    npx expo prebuild --clean
+    ```
+
+    The `--clean` flag ensures a fresh build by removing existing native directories before generating new ones.
+  </Step>
+
+  <Step title="Run your app">
+    Build and run your app on your target platform:
+
+    <CodeGroup>
+
+    ```bash iOS
+    npx expo run:ios
+    ```
+
+    ```bash Android
+    npx expo run:android
+    ```
+
+    </CodeGroup>
+
+    This command compiles the native code and launches your app on a simulator/emulator or physical device.
+  </Step>
+
+  <Step title="Verify installation">
+    Test that the module is properly linked by importing and using it:
+
+    ```typescript
+    import Storage from 'expo-native-storage';
+
+    // Try a simple operation
+    await Storage.setItem('test', 'value');
+    const result = await Storage.getItem('test');
+    console.log(result); // 'value'
+    ```
+
+    If you see the value logged, expo-native-storage is successfully installed!
+  </Step>
+</Steps>
+
+## Platform-specific verification
+
+If you encounter issues, verify the module is properly linked on each platform:
+
+### iOS
+
+Check that `ExpoNativeStorage` appears in your `ios/Podfile.lock`:
+
+```bash
+grep -i "ExpoNativeStorage" ios/Podfile.lock
+```
+
+### Android
+
+Verify the module is included in your Android build by checking the gradle dependencies:
+
+```bash
+cd android && ./gradlew :app:dependencies | grep expo-native-storage
+```
+
+## Troubleshooting
+
+If you encounter the error "Cannot find native module 'ExpoNativeStorage'", see the [Troubleshooting guide](/guides/troubleshooting) for solutions.
+
+## Next steps
+
+<Card title="Quickstart" icon="rocket" href="/quickstart">
+  Start using expo-native-storage in your app with a working example.
+</Card>

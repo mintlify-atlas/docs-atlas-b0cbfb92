@@ -1,0 +1,287 @@
+---
+title: Platform Implementation
+description: How expo-native-storage works on iOS, Android, and Web
+---
+
+expo-native-storage leverages native platform APIs to provide fast, reliable storage. Understanding how it works on each platform helps you make informed decisions about data size, performance, and limitations.
+
+## iOS: UserDefaults
+
+On iOS, expo-native-storage uses `UserDefaults`, Apple's built-in key-value storage system.
+
+### Implementation
+
+```swift ExpoNativeStorageModule.swift
+import ExpoModulesCore
+
+public class ExpoNativeStorageModule: Module {
+  public func definition() -> ModuleDefinition {
+    Name("ExpoNativeStorage")
+    
+    Function("setItemSync") { (key: String, value: String) in
+      UserDefaults.standard.set(value, forKey: key)
+    }
+    
+    Function("getItemSync") { (key: String) -> String? in
+      return UserDefaults.standard.string(forKey: key)
+    }
+    
+    Function("removeItemSync") { (key: String) in
+      UserDefaults.standard.removeObject(forKey: key)
+    }
+    
+    Function("clearSync") { () in
+      if let bundleID = Bundle.main.bundleIdentifier {
+        UserDefaults.standard.removePersistentDomain(forName: bundleID)
+      }
+    }
+  }
+}
+```
+
+### Characteristics
+
+- **Synchronous operations** - All reads and writes execute on the calling thread
+- **Disk I/O** - Writes persist to disk synchronously (~1ms per write)
+- **In-memory cache** - UserDefaults maintains an in-memory cache for fast reads
+- **Thread-safe** - Safe to access from any thread
+- **Automatic synchronization** - Changes sync automatically across app extensions
+
+### Data size limits
+
+<Warning>
+  UserDefaults is optimized for small data. Apple recommends limiting individual values to **~1MB or less**. Larger values may cause performance degradation.
+</Warning>
+
+```typescript
+// Good: Small configuration data
+Storage.setObjectSync('settings', { 
+  theme: 'dark', 
+  notifications: true 
+});
+
+// Avoid: Large data objects
+// Don't store images, videos, or large JSON arrays
+Storage.setObjectSync('largeData', hugeArray); // Not recommended
+```
+
+### Performance characteristics
+
+- **First write**: ~1ms (disk I/O)
+- **Subsequent reads**: &lt;0.1ms (in-memory cache)
+- **Clear operation**: Removes all keys for your app's bundle ID
+
+<Info>
+  For bulk write operations (1000+ items), consider specialized libraries like [react-native-mmkv](https://github.com/mrousavy/react-native-mmkv) which use memory-mapped files for faster disk I/O.
+</Info>
+
+## Android: SharedPreferences
+
+On Android, expo-native-storage uses `SharedPreferences`, Android's built-in key-value storage system.
+
+### Implementation
+
+```kotlin ExpoNativeStorageModule.kt
+package expo.modules.nativestorage
+
+import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.modules.ModuleDefinition
+import android.content.Context
+import android.content.SharedPreferences
+
+class ExpoNativeStorageModule : Module() {
+  private val context: Context
+    get() = requireNotNull(appContext.reactContext)
+  
+  private val prefs: SharedPreferences
+    get() = context.getSharedPreferences("ExpoNativeStorage", Context.MODE_PRIVATE)
+  
+  override fun definition() = ModuleDefinition {
+    Name("ExpoNativeStorage")
+    
+    Function("setItemSync") { key: String, value: String ->
+      prefs.edit().putString(key, value).apply()
+    }
+    
+    Function("getItemSync") { key: String ->
+      return@Function prefs.getString(key, null)
+    }
+    
+    Function("removeItemSync") { key: String ->
+      prefs.edit().remove(key).apply()
+    }
+    
+    Function("clearSync") {
+      prefs.edit().clear().apply()
+    }
+  }
+}
+```
+
+### Characteristics
+
+- **In-memory cache** - All data loads into memory on first access
+- **Asynchronous persistence** - `apply()` writes to disk asynchronously
+- **Immediate reads** - Reads return instantly from the in-memory cache
+- **Thread-safe** - All operations are thread-safe
+- **Process-safe** - Changes visible across app processes
+
+### Performance advantages
+
+SharedPreferences performance **improves with usage** thanks to in-memory caching:
+
+| Operations | First Access | After Cache Load |
+|------------|--------------|------------------|
+| 100 ops | ~12ms | &lt;1ms |
+| 500 ops | ~50ms | &lt;5ms |
+| 1000 ops | ~98ms | &lt;10ms |
+
+<Tip>
+  The more operations you perform, the bigger the performance advantage over SQLite-based solutions like AsyncStorage, which must query the database for every operation.
+</Tip>
+
+### Data size considerations
+
+```typescript
+// Good: Small to medium data
+Storage.setObjectSync('userPreferences', preferences);
+
+// SharedPreferences handles reasonable data sizes well
+Storage.setObjectSync('appConfig', configObject);
+
+// Avoid: Very large datasets
+// Use a proper database for large data
+Storage.setObjectSync('entireDatabase', largeDataset); // Not recommended
+```
+
+### Why it's faster than AsyncStorage
+
+expo-native-storage outperforms AsyncStorage on Android because:
+
+1. **In-memory caching** - All data cached after first access
+2. **No SQLite overhead** - AsyncStorage uses SQLite which requires parsing, query execution, and result marshaling
+3. **Optimized for key-value** - SharedPreferences is purpose-built for key-value storage
+
+```typescript
+// Performance comparison (1000 operations on Android)
+// expo-native-storage: ~95ms
+// AsyncStorage: ~1216ms
+// Result: 13x faster
+```
+
+## Web: localStorage
+
+On web platforms, expo-native-storage falls back to the browser's `localStorage` API.
+
+### Implementation
+
+```typescript
+// Web implementation uses localStorage
+if (typeof window !== 'undefined' && window.localStorage) {
+  localStorage.setItem(key, value);
+  const value = localStorage.getItem(key);
+  localStorage.removeItem(key);
+  localStorage.clear();
+}
+```
+
+### Characteristics
+
+- **Synchronous operations** - All operations execute immediately
+- **String storage only** - All values stored as strings
+- **Origin-scoped** - Data isolated per origin (protocol + domain + port)
+- **Persistent** - Data survives browser restarts
+- **No expiration** - Data persists until explicitly cleared
+
+### Storage limits
+
+<Warning>
+  localStorage has strict size limits that vary by browser:
+  
+  - Most browsers: **5MB per origin**
+  - Some browsers: **10MB per origin**
+  - Mobile browsers: May have lower limits
+  
+  Exceeding the quota throws a `QuotaExceededError`.
+</Warning>
+
+```typescript
+// Handle quota errors on web
+try {
+  await Storage.setItem('key', largeValue);
+} catch (error) {
+  if (error.name === 'QuotaExceededError') {
+    console.error('Storage quota exceeded');
+    // Clear old data or reduce storage usage
+  }
+}
+```
+
+## Platform comparison
+
+<CardGroup cols={3}>
+  <Card title="iOS" icon="apple">
+    **UserDefaults**
+    
+    - Synchronous disk I/O
+    - ~1MB per key recommended
+    - In-memory cache
+    - Thread-safe
+  </Card>
+  
+  <Card title="Android" icon="android">
+    **SharedPreferences**
+    
+    - In-memory cache
+    - Async disk writes
+    - Scales with usage
+    - Process-safe
+  </Card>
+  
+  <Card title="Web" icon="globe">
+    **localStorage**
+    
+    - Synchronous
+    - 5-10MB per origin
+    - String storage
+    - Origin-scoped
+  </Card>
+</CardGroup>
+
+## Choosing the right storage solution
+
+### Use expo-native-storage for:
+
+- User preferences and settings
+- App configuration
+- Small cached data
+- Authentication tokens
+- Feature flags
+- Theme preferences
+
+### Consider alternatives for:
+
+- Large files (images, videos) → Use `expo-file-system`
+- Relational data → Use SQLite with `expo-sqlite`
+- Bulk write operations (1000+ items) → Use `react-native-mmkv`
+- Large JSON documents → Use a proper database
+- Sensitive data → Use `expo-secure-store` with encryption
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Performance"
+    icon="gauge-high"
+    href="/concepts/performance"
+  >
+    Learn about performance benchmarks and optimization strategies.
+  </Card>
+  <Card
+    title="Best Practices"
+    icon="star"
+    href="/guides/best-practices"
+  >
+    Discover patterns for effective data management.
+  </Card>
+</CardGroup>

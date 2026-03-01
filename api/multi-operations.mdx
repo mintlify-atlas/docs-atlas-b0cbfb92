@@ -1,0 +1,237 @@
+---
+title: 'Multi Operations'
+description: 'Batch operations for reading and writing multiple items efficiently'
+---
+
+Multi operations allow you to read or write multiple storage items in a single operation, improving performance through parallel execution.
+
+## multiGet()
+
+Retrieve multiple items from storage at once.
+
+```typescript
+async multiGet(keys: string[]): Promise<Record<string, string | null>>
+```
+
+### Parameters
+
+<ParamField path="keys" type="string[]" required>
+  An array of storage keys to retrieve
+</ParamField>
+
+### Returns
+
+<ResponseField name="Promise<Record<string, string | null>>" type="Promise<Record<string, string | null>>">
+  A promise that resolves to an object mapping each key to its stored value. Keys that don't exist will have a value of `null`.
+</ResponseField>
+
+### Example
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Get multiple values at once
+const result = await Storage.multiGet(['username', 'email', 'theme']);
+
+console.log(result);
+// {
+//   username: 'john_doe',
+//   email: 'john@example.com',
+//   theme: 'dark'
+// }
+
+// Check for missing keys
+if (result.theme === null) {
+  console.log('Theme not set, using default');
+}
+```
+
+### Advanced Example
+
+```typescript
+// Load user session data
+const sessionKeys = ['authToken', 'userId', 'userEmail', 'lastLogin'];
+const session = await Storage.multiGet(sessionKeys);
+
+if (session.authToken && session.userId) {
+  // Valid session
+  initializeUserSession(session);
+} else {
+  // Invalid or missing session
+  redirectToLogin();
+}
+```
+
+### Performance Benefits
+
+All get operations are executed **in parallel** using `Promise.all()`, making this significantly faster than calling `getItem()` multiple times:
+
+```typescript
+// Slow - sequential operations
+const username = await Storage.getItem('username');
+const email = await Storage.getItem('email');
+const theme = await Storage.getItem('theme');
+
+// Fast - parallel operations
+const result = await Storage.multiGet(['username', 'email', 'theme']);
+```
+
+---
+
+## multiSet()
+
+Store multiple items in storage at once.
+
+```typescript
+async multiSet(items: Record<string, string>): Promise<void>
+```
+
+### Parameters
+
+<ParamField path="items" type="Record<string, string>" required>
+  An object where keys are storage keys and values are the strings to store
+</ParamField>
+
+### Returns
+
+<ResponseField name="Promise<void>" type="Promise<void>">
+  A promise that resolves when all items are stored
+</ResponseField>
+
+### Example
+
+```typescript
+import Storage from 'expo-native-storage';
+
+// Store multiple values at once
+await Storage.multiSet({
+  username: 'john_doe',
+  email: 'john@example.com',
+  theme: 'dark'
+});
+```
+
+### Advanced Example
+
+```typescript
+// Save user session
+await Storage.multiSet({
+  authToken: 'eyJhbGciOiJIUzI1NiIs...',
+  userId: '12345',
+  userEmail: 'john@example.com',
+  lastLogin: new Date().toISOString()
+});
+
+// Batch update settings
+const newSettings = {
+  theme: 'dark',
+  language: 'en',
+  notifications: 'enabled',
+  fontSize: '16'
+};
+await Storage.multiSet(newSettings);
+```
+
+### Performance Benefits
+
+All set operations are executed **in parallel** using `Promise.all()`, making this significantly faster than calling `setItem()` multiple times:
+
+```typescript
+// Slow - sequential operations
+await Storage.setItem('username', 'john_doe');
+await Storage.setItem('email', 'john@example.com');
+await Storage.setItem('theme', 'dark');
+
+// Fast - parallel operations
+await Storage.multiSet({
+  username: 'john_doe',
+  email: 'john@example.com',
+  theme: 'dark'
+});
+```
+
+---
+
+## Implementation Details
+
+Both `multiGet()` and `multiSet()` use `Promise.all()` internally to execute operations in parallel:
+
+```typescript
+// multiGet implementation
+async multiGet(keys: string[]): Promise<Record<string, string | null>> {
+  const result: Record<string, string | null> = {};
+  await Promise.all(
+    keys.map(async (key) => {
+      result[key] = await this.getItem(key);
+    })
+  );
+  return result;
+}
+
+// multiSet implementation
+async multiSet(items: Record<string, string>): Promise<void> {
+  await Promise.all(
+    Object.entries(items).map(([key, value]) => this.setItem(key, value))
+  );
+}
+```
+
+This parallel execution provides significant performance improvements, especially when:
+- Working with multiple storage keys
+- Initializing or saving app state
+- Loading user preferences
+- Managing session data
+
+---
+
+## Use Cases
+
+### Loading App Configuration
+
+```typescript
+async function loadAppConfig() {
+  const config = await Storage.multiGet([
+    'theme',
+    'language',
+    'notifications',
+    'fontSize',
+    'autoSave'
+  ]);
+  
+  return {
+    theme: config.theme || 'light',
+    language: config.language || 'en',
+    notifications: config.notifications === 'true',
+    fontSize: parseInt(config.fontSize || '14'),
+    autoSave: config.autoSave === 'true'
+  };
+}
+```
+
+### Saving User Session
+
+```typescript
+async function saveUserSession(user: User, token: string) {
+  await Storage.multiSet({
+    authToken: token,
+    userId: user.id.toString(),
+    userEmail: user.email,
+    userName: user.name,
+    lastLogin: new Date().toISOString()
+  });
+}
+```
+
+### Batch Settings Update
+
+```typescript
+async function updateUserPreferences(prefs: UserPreferences) {
+  await Storage.multiSet({
+    'pref_theme': prefs.theme,
+    'pref_language': prefs.language,
+    'pref_notifications': prefs.notifications.toString(),
+    'pref_emailAlerts': prefs.emailAlerts.toString(),
+    'pref_pushAlerts': prefs.pushAlerts.toString()
+  });
+}
+```

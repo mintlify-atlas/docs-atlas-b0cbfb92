@@ -1,0 +1,334 @@
+---
+title: Performance
+description: Benchmarks and performance characteristics of expo-native-storage
+---
+
+expo-native-storage delivers superior performance compared to traditional storage solutions. This page explains why it's faster and provides real-world benchmarks.
+
+## Performance benchmarks
+
+All tests performed on real devices with expo-native-storage 0.2.0 and the latest version of AsyncStorage.
+
+### Async methods comparison
+
+Testing read/write operations on physical devices:
+
+| Platform | Operations | expo-native-storage | AsyncStorage | Improvement |
+|----------|------------|-------------------|--------------|-------------|
+| **Android Phone** | 100 ops | 11ms | 165ms | **15x faster** |
+| | 200 ops | ~25ms | ~290ms | **11x faster** |
+| | 500 ops | ~50ms | ~650ms | **13x faster** |
+| | 1000 ops | ~95ms | ~1216ms | **13x faster** |
+| **Android Emulator** | 100 ops | 12ms | 219ms | **18x faster** |
+| **iOS Phone** | 100 ops | 72ms | 72ms | Same speed |
+
+<Info>
+  Tests performed on iPhone 17 Pro and Nothing Phone 3a with Android 15. Emulator results from MacBook Pro M4 with 16GB RAM.
+</Info>
+
+### Sync vs async methods
+
+Comparing sync methods against async methods within expo-native-storage:
+
+| Platform | Operations | Sync Methods | Async Methods | Improvement |
+|----------|------------|--------------|---------------|-------------|
+| **Android Phone** | 1000 ops | 98ms | 472ms | **4.8x faster** |
+| **iOS Phone** | 1000 ops | 1098ms | 1499ms | **1.4x faster** |
+
+<Tip>
+  Sync methods are faster because they skip Promise creation overhead. Both APIs use the same native storage underneath.
+</Tip>
+
+## Bundle size comparison
+
+Smaller bundle size means faster app downloads and startup:
+
+| Package | Bundle Size | Comparison |
+|---------|-------------|------------|
+| expo-native-storage | 19.6KB | Baseline |
+| @react-native-async-storage/async-storage | 381KB | **19x larger** |
+
+## Why expo-native-storage is faster
+
+### Android: In-memory caching
+
+SharedPreferences maintains an in-memory cache that loads on first access:
+
+```kotlin ExpoNativeStorageModule.kt
+private val prefs: SharedPreferences
+  get() = context.getSharedPreferences("ExpoNativeStorage", Context.MODE_PRIVATE)
+
+Function("getItemSync") { key: String ->
+  // Returns immediately from in-memory cache
+  return@Function prefs.getString(key, null)
+}
+```
+
+AsyncStorage uses SQLite, which requires:
+1. Database query execution
+2. SQL parsing
+3. Result set creation
+4. Data marshaling across the bridge
+
+```typescript
+// expo-native-storage: Direct memory access
+const value = Storage.getItemSync('key'); // <1ms after cache load
+
+// AsyncStorage: Database query every time
+const value = await AsyncStorage.getItem('key'); // ~1-2ms per operation
+```
+
+### iOS: Direct UserDefaults access
+
+Both expo-native-storage and AsyncStorage use UserDefaults on iOS, resulting in similar performance:
+
+```swift ExpoNativeStorageModule.swift
+Function("getItemSync") { (key: String) -> String? in
+  return UserDefaults.standard.string(forKey: key)
+}
+```
+
+<Note>
+  iOS performance is limited by UserDefaults disk I/O (~1ms per write). Both libraries have similar performance characteristics on iOS.
+</Note>
+
+## Performance at scale
+
+The performance advantage **increases** with usage:
+
+```typescript
+// First operation: Cache load overhead
+Storage.getItemSync('key1'); // ~12ms (initial cache load)
+
+// Subsequent operations: Instant from cache
+Storage.getItemSync('key2'); // <0.1ms
+Storage.getItemSync('key3'); // <0.1ms
+Storage.getItemSync('key4'); // <0.1ms
+```
+
+### Why performance improves
+
+1. **First access**: SharedPreferences loads all data into memory
+2. **Subsequent operations**: All reads hit the in-memory cache
+3. **Writes**: Update cache immediately, persist asynchronously
+
+AsyncStorage must query SQLite for every operation:
+
+```typescript
+// Every operation hits the database
+await AsyncStorage.getItem('key1'); // ~1-2ms
+await AsyncStorage.getItem('key2'); // ~1-2ms
+await AsyncStorage.getItem('key3'); // ~1-2ms
+await AsyncStorage.getItem('key4'); // ~1-2ms
+```
+
+## Ideal use cases
+
+expo-native-storage excels in these scenarios:
+
+### Settings screens with many preferences
+
+```typescript
+function SettingsScreen() {
+  // Load all settings synchronously
+  const [settings, setSettings] = useState(() => ({
+    theme: Storage.getItemSync('theme') || 'light',
+    notifications: Storage.getItemSync('notifications') === 'true',
+    language: Storage.getItemSync('language') || 'en',
+    fontSize: Storage.getItemSync('fontSize') || 'medium',
+    autoSave: Storage.getItemSync('autoSave') === 'true',
+  }));
+
+  // All reads complete in <1ms after initial cache load
+  return <SettingsForm settings={settings} />;
+}
+```
+
+### Offline data caching with frequent reads
+
+```typescript
+function ProductList() {
+  // Cache products locally
+  const [products, setProducts] = useState(() => {
+    return Storage.getObjectSync('products') || [];
+  });
+
+  useEffect(() => {
+    // Fetch fresh data
+    fetchProducts().then(fresh => {
+      Storage.setObjectSync('products', fresh);
+      setProducts(fresh);
+    });
+  }, []);
+
+  // Instant load from cache, update when fresh data arrives
+  return <ProductGrid products={products} />;
+}
+```
+
+### State persistence with frequent updates
+
+```typescript
+function usePersistedState<T>(key: string, defaultValue: T) {
+  const [state, setState] = useState<T>(() => {
+    const cached = Storage.getObjectSync<T>(key);
+    return cached ?? defaultValue;
+  });
+
+  useEffect(() => {
+    // Persist every state change
+    Storage.setObjectSync(key, state);
+  }, [key, state]);
+
+  return [state, setState] as const;
+}
+```
+
+### User session data with multiple keys
+
+```typescript
+function SessionManager() {
+  // Load all session data at once
+  const session = useMemo(() => ({
+    userId: Storage.getItemSync('userId'),
+    token: Storage.getItemSync('token'),
+    refreshToken: Storage.getItemSync('refreshToken'),
+    expiresAt: Storage.getItemSync('expiresAt'),
+    lastSync: Storage.getItemSync('lastSync'),
+  }), []);
+
+  // All reads complete in milliseconds
+  return session;
+}
+```
+
+## Performance optimization tips
+
+<AccordionGroup>
+  <Accordion title="Use sync methods for initialization">
+    Sync methods eliminate loading states and provide instant access:
+
+    ```typescript
+    // Fast: Sync method during initialization
+    const [theme] = useState(() => 
+      Storage.getItemSync('theme') || 'light'
+    );
+
+    // Slower: Async method requires loading state
+    const [theme, setTheme] = useState('light');
+    useEffect(() => {
+      Storage.getItem('theme').then(setTheme);
+    }, []);
+    ```
+  </Accordion>
+
+  <Accordion title="Batch operations when possible">
+    Use `multiSet` and `multiGet` for multiple keys:
+
+    ```typescript
+    // Good: Single batch operation
+    await Storage.multiSet({
+      key1: 'value1',
+      key2: 'value2',
+      key3: 'value3'
+    });
+
+    // Slower: Multiple individual operations
+    await Storage.setItem('key1', 'value1');
+    await Storage.setItem('key2', 'value2');
+    await Storage.setItem('key3', 'value3');
+    ```
+  </Accordion>
+
+  <Accordion title="Store small, frequently accessed data">
+    expo-native-storage is optimized for small key-value data:
+
+    ```typescript
+    // Good: Small configuration objects
+    Storage.setObjectSync('config', { theme: 'dark', lang: 'en' });
+
+    // Avoid: Large data arrays
+    Storage.setObjectSync('allUsers', largeUserArray); // Use a database
+    ```
+  </Accordion>
+
+  <Accordion title="Avoid unnecessary re-reads">
+    Cache values in memory when reading frequently:
+
+    ```typescript
+    // Good: Read once, cache in memory
+    const config = useMemo(() => 
+      Storage.getObjectSync('config'),
+      []
+    );
+
+    // Avoid: Reading on every render
+    function Component() {
+      const config = Storage.getObjectSync('config'); // Re-reads on every render
+      return <View />;
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## When to consider alternatives
+
+While expo-native-storage is fast, other solutions may be better for specific use cases:
+
+### Large bulk writes (iOS)
+
+For 1000+ write operations on iOS, UserDefaults disk I/O becomes a bottleneck:
+
+```typescript
+// 1000 writes on iOS: ~1098ms
+for (let i = 0; i < 1000; i++) {
+  Storage.setItemSync(`key${i}`, `value${i}`);
+}
+```
+
+Consider [react-native-mmkv](https://github.com/mrousavy/react-native-mmkv) for bulk operations, which uses memory-mapped files for faster disk I/O.
+
+### Large data storage
+
+For large datasets, use a proper database:
+
+```typescript
+// Avoid: Storing large arrays
+Storage.setObjectSync('products', thousandsOfProducts); // Not recommended
+
+// Better: Use expo-sqlite or another database
+import * as SQLite from 'expo-sqlite';
+const db = SQLite.openDatabase('products.db');
+```
+
+### Sensitive data
+
+For sensitive data like passwords or API keys, use encrypted storage:
+
+```typescript
+// Avoid: Storing sensitive data unencrypted
+Storage.setItemSync('password', userPassword); // Not secure
+
+// Better: Use expo-secure-store
+import * as SecureStore from 'expo-secure-store';
+await SecureStore.setItemAsync('password', userPassword);
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Platform Implementation"
+    icon="server"
+    href="/concepts/platform-implementation"
+  >
+    Learn how native storage works on each platform.
+  </Card>
+  <Card
+    title="Best Practices"
+    icon="star"
+    href="/guides/best-practices"
+  >
+    Discover patterns for optimal storage usage.
+  </Card>
+</CardGroup>
